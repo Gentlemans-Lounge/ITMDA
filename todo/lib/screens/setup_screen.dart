@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:lottie/lottie.dart';
 import 'package:todo/screens/login_screen.dart';
-import 'registration_screen.dart';
 
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
@@ -96,7 +95,7 @@ class _SetupScreenState extends State<SetupScreen>
                     ),
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (context) => LoginScreen()),
+                        MaterialPageRoute(builder: (context) => const LoginScreen()),
                       );
                     },
                     child: const Text("I'll do it NowNow"),

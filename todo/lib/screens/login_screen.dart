@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../services/firebase_service.dart';
 import 'registration_screen.dart';
-import 'home_screen.dart';
+import 'preferences_screen.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
@@ -27,17 +30,17 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFFAF0FF),
+      backgroundColor: const Color(0xFFFAF0FF),
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                SizedBox(height: 60),
-                Text(
+                const SizedBox(height: 60),
+                const Text(
                   'Login',
                   style: TextStyle(
                     fontSize: 28,
@@ -45,9 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Colors.black,
                   ),
                 ),
-                SizedBox(height: 100),
+                const SizedBox(height: 100),
                 TextFormField(
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email, color: Color(0xFFE6A2F8)),
                     labelStyle: TextStyle(color: Color(0xFFE6A2F8)),
@@ -61,23 +64,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: (val) => val!.isEmpty ? 'Enter an email' : null,
                   onChanged: (val) => setState(() => _email = val),
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 TextFormField(
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock, color: Color(0xFFE6A2F8)),
+                    prefixIcon: const Icon(Icons.lock, color: Color(0xFFE6A2F8)),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: Color(0xFFE6A2F8),
+                        color: const Color(0xFFE6A2F8),
                       ),
                       onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    labelStyle: TextStyle(color: Color(0xFFE6A2F8)),
-                    enabledBorder: UnderlineInputBorder(
+                    labelStyle: const TextStyle(color: Color(0xFFE6A2F8)),
+                    enabledBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE6A2F8)),
                     ),
-                    focusedBorder: UnderlineInputBorder(
+                    focusedBorder: const UnderlineInputBorder(
                       borderSide: BorderSide(color: Color(0xFFE6A2F8)),
                     ),
                   ),
@@ -85,12 +88,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   validator: (val) => val!.length < 6 ? 'Enter a password 6+ chars long' : null,
                   onChanged: (val) => setState(() => _password = val),
                 ),
-                SizedBox(height: 100),
+                const SizedBox(height: 100),
                 ElevatedButton(
-                  child: Text('Sign in', style: TextStyle(color: Colors.white, fontSize: 16)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFFE6A2F8),
-                    padding: EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: const Color(0xFFE6A2F8),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -102,58 +104,81 @@ class _LoginScreenState extends State<LoginScreen> {
                         _showSnackBar('Login failed. Please check your credentials and try again.', true);
                       } else {
                         _showSnackBar('Login successful!', false);
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => HomeScreen()),
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) => PreferencesScreen(
+                              onThemeChanged: (bool isDarkMode) {
+                                // Find the MyAppState and call toggleTheme
+                                MyAppState? myAppState = context.findAncestorStateOfType<MyAppState>();
+                                myAppState?.toggleTheme(isDarkMode);
+                              },
+                            ),
+                          ),
                         );
                       }
                     }
                   },
+                  child: const Text('Sign in', style: TextStyle(color: Colors.white, fontSize: 16)),
                 ),
-                SizedBox(height: 20),
-                Container(
-                  width: 220,
-                  child: OutlinedButton.icon(
-                    icon: Image.asset('assets/images/google_logo.png', height: 18),
-                    label: Text('Continue with Google', style: TextStyle(color: Colors.black87, fontSize: 14)),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      side: BorderSide(color: Colors.grey[300]!),
+                const SizedBox(height: 20),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('OR', style: TextStyle(color: Colors.grey)),
                     ),
-                    onPressed: () async {
-                      dynamic result = await _firebaseService.signInWithGoogle();
-                      if (result == null) {
-                        _showSnackBar('Google Sign-In failed. Please try again.', true);
-                      } else {
-                        _showSnackBar('Google Sign-In successful!', false);
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => HomeScreen()),
-                        );
-                      }
-                    },
-                  ),
+                    Expanded(child: Divider()),
+                  ],
                 ),
-                Spacer(),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  icon: Image.asset('assets/images/google_logo.png', height: 18),
+                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black87, fontSize: 14)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  onPressed: () async {
+                    dynamic result = await _firebaseService.signInWithGoogle();
+                    if (result == null) {
+                      _showSnackBar('Google Sign-In failed. Please try again.', true);
+                    } else {
+                      _showSnackBar('Google Sign-In successful!', false);
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (context) => PreferencesScreen(
+                            onThemeChanged: (bool isDarkMode) {
+                              // Find the MyAppState and call toggleTheme
+                              MyAppState? myAppState = context.findAncestorStateOfType<MyAppState>();
+                              myAppState?.toggleTheme(isDarkMode);
+                            },
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text("Don't have an account? ", style: TextStyle(color: Colors.grey[600])),
                     TextButton(
-                      child: Text('Register', style: TextStyle(color: Color(0xFFE6A2F8))),
+                      child: const Text('Register', style: TextStyle(color: Color(0xFFE6A2F8))),
                       onPressed: () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (context) => RegistrationScreen()),
+                          MaterialPageRoute(builder: (context) => const RegistrationScreen()),
                         );
                       },
                     ),
                   ],
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
               ],
             ),
           ),

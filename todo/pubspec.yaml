@@ -68,6 +68,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/animations/welcome.json
+    - assets/animations/preferences.json
     - assets/images/google_logo.png
   # To add assets to your application, add an assets section, like this:
   # assets:
