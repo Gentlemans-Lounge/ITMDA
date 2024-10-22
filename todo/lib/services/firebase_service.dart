@@ -7,42 +7,166 @@ class FirebaseService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  // Auth methods
-  Future<User?> signUpWithEmailAndPassword(String email, String password, String role) async {
-    try {
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      User? user = result.user;
-      if (user != null) {
-        await createUser(user, role);
-      }
-      return user;
-    } catch (e) {
-      print(e.toString());
-      return null;
+  Future<String> _generateUserId(String displayName, String role) async {
+    // Convert display name to lowercase and remove spaces
+    String baseId = displayName.toLowerCase().replaceAll(' ', '');
+
+    // Append 'pm' if role is project manager
+    if (role == 'project_manager') {
+      baseId += 'pm';
     }
+
+    // Get all users
+    QuerySnapshot query = await _firestore.collection('users').get();
+
+    int highestId = 0;
+
+    // Find the highest ID for users with similar role identifier
+    for (var doc in query.docs) {
+      String docId = doc.id;
+      // For project managers, look for 'pm_' pattern
+      if (role == 'project_manager' && docId.contains('pm_')) {
+        // Extract the numeric part after the last underscore
+        String numericPart = docId.split('_').last;
+        int? currentId = int.tryParse(numericPart);
+        if (currentId != null && currentId > highestId) {
+          highestId = currentId;
+        }
+      }
+      // For developers, look for IDs without 'pm_' pattern
+      else if (role == 'developer' && !docId.contains('pm_')) {
+        String numericPart = docId.split('_').last;
+        int? currentId = int.tryParse(numericPart);
+        if (currentId != null && currentId > highestId) {
+          highestId = currentId;
+        }
+      }
+    }
+
+    // Increment the highest ID found
+    int newId = highestId + 1;
+
+    // Format new ID with padding (e.g., 001, 002)
+    String formattedId = newId.toString().padLeft(3, '0');
+
+    return '${baseId}_$formattedId';
   }
 
-  Future<User?> signInWithEmailAndPassword(String email, String password) async {
+  // Helper function to check if user exists in Firestore
+  Future<DocumentSnapshot?> _checkUserExists(String email) async {
+    QuerySnapshot query = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (query.docs.isNotEmpty) {
+      return query.docs.first;
+    }
+    return null;
+  }
+
+  // Sign in with email
+  Future<Map<String, dynamic>> signInWithEmailAndPassword(String email, String password) async {
     try {
+      // First check if user exists in Firestore
+      DocumentSnapshot? userDoc = await _checkUserExists(email);
+      if (userDoc == null) {
+        return {
+          'success': false,
+          'message': 'No account found with this email',
+          'needsRegistration': true
+        };
+      }
+
+      // Attempt Firebase Auth sign in
       UserCredential result = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      User? user = result.user;
-      if (user != null) {
-        await updateUserLastLogin(user.uid);
+
+      if (result.user != null) {
+        await updateUserLastLogin(userDoc.id);
+        return {
+          'success': true,
+          'user': result.user,
+          'userData': userDoc.data()
+        };
       }
-      return user;
+
+      return {
+        'success': false,
+        'message': 'Sign in failed'
+      };
     } catch (e) {
-      print(e.toString());
-      return null;
+      return {
+        'success': false,
+        'message': e.toString()
+      };
     }
   }
 
-  Future<User?> signInWithGoogle() async {
+  // Sign up with email
+  Future<Map<String, dynamic>> signUpWithEmailAndPassword(
+      String email,
+      String password,
+      String displayName,
+      String role
+      ) async {
+    try {
+      // Check if user already exists
+      DocumentSnapshot? existingUser = await _checkUserExists(email);
+      if (existingUser != null) {
+        return {
+          'success': false,
+          'message': 'An account with this email already exists'
+        };
+      }
+
+      // Create auth user
+      UserCredential result = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (result.user != null) {
+        // Generate proper document ID
+        String docId = await _generateUserId(displayName, role);
+
+        // Create user document
+        await _firestore.collection('users').doc(docId).set({
+          'email': email,
+          'displayName': displayName,
+          'role': role,
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+
+        return {
+          'success': true,
+          'user': result.user,
+          'userData': {
+            'displayName': displayName,
+            'role': role,
+            'email': email
+          }
+        };
+      }
+
+      return {
+        'success': false,
+        'message': 'Registration failed'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString()
+      };
+    }
+  }
+
+  // Sign in with Google
+  Future<Map<String, dynamic>> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleSignInAccount = await _googleSignIn.signIn();
       if (googleSignInAccount != null) {
@@ -58,22 +182,75 @@ class FirebaseService {
         final User? user = authResult.user;
 
         if (user != null) {
-          // Check if the user already exists in Firestore
-          final userDoc = await _firestore.collection('users').doc(user.uid).get();
-          if (!userDoc.exists) {
-            // If the user doesn't exist, create a new document for them
-            await createUser(user, 'developer'); // Default role as 'developer'
-          }
-          await updateUserLastLogin(user.uid);
-        }
+          // Check if user exists in Firestore
+          DocumentSnapshot? existingUser = await _checkUserExists(user.email!);
 
-        return user;
+          if (existingUser != null) {
+            // Existing user - normal sign in
+            await updateUserLastLogin(existingUser.id);
+            return {
+              'success': true,
+              'user': user,
+              'userData': existingUser.data(),
+              'isNewUser': false
+            };
+          } else {
+            // New user - needs to complete registration
+            return {
+              'success': true,
+              'user': user,
+              'needsRegistration': true,
+              'isNewUser': true,
+              'email': user.email
+            };
+          }
+        }
       }
-    } catch (error) {
-      print(error);
-      return null;
+
+      return {
+        'success': false,
+        'message': 'Google sign in failed'
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString()
+      };
     }
-    return null;
+  }
+
+  // Complete Google Sign Up (called after user provides additional details)
+  Future<Map<String, dynamic>> completeGoogleSignUp(
+      User user,
+      String displayName,
+      String role
+      ) async {
+    try {
+      String docId = await _generateUserId(displayName, role);
+
+      await _firestore.collection('users').doc(docId).set({
+        'email': user.email,
+        'displayName': displayName,
+        'role': role,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLogin': FieldValue.serverTimestamp(),
+      });
+
+      return {
+        'success': true,
+        'user': user,
+        'userData': {
+          'displayName': displayName,
+          'role': role,
+          'email': user.email
+        }
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString()
+      };
+    }
   }
 
   Future<void> signOut() async {
