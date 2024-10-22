@@ -3,7 +3,8 @@ import '../main.dart';
 import '../services/firebase_service.dart';
 import 'registration_screen.dart';
 import 'preferences_screen.dart';
-import 'home_screen.dart';
+import 'developer_home.dart';
+import 'pm_home.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,20 +50,24 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (result['success']) {
+        final userData = result['userData'] as Map<String, dynamic>;
+        final role = userData['role'] as String;
+
         _showSnackBar('Login successful!', false);
         if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) =>
-                  PreferencesScreen(
-                    onThemeChanged: (bool isDarkMode) {
-                      MyAppState? myAppState = context.findAncestorStateOfType<
-                          MyAppState>();
-                      myAppState?.toggleTheme(isDarkMode);
-                    },
-                  ),
-            ),
-          );
+          if (role == 'project_manager') {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const ProjectManagerHome(),
+              ),
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => const DeveloperHome(),
+              ),
+            );
+          }
         }
       } else {
         if (result['needsRegistration'] == true) {
@@ -91,26 +96,29 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) =>
-                    PreferencesScreen(
-                      onThemeChanged: (bool isDarkMode) {
-                        MyAppState? myAppState = context
-                            .findAncestorStateOfType<MyAppState>();
-                        myAppState?.toggleTheme(isDarkMode);
-                      },
-                      isNewUser: true,
-                      userData: result,
-                    ),
+                builder: (context) => PreferencesScreen(
+                  onThemeChanged: (bool isDarkMode) {
+                    MyAppState? myAppState = context.findAncestorStateOfType<MyAppState>();
+                    myAppState?.toggleTheme(isDarkMode);
+                  },
+                  isNewUser: true,
+                  userData: result,
+                ),
               ),
             );
           }
         } else {
           // Existing Google user
+          final userData = result['userData'] as Map<String, dynamic>;
+          final role = userData['role'] as String;
+
           _showSnackBar('Login successful!', false);
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) => const HomeScreen(),
+                builder: (context) => role == 'project_manager'
+                    ? const ProjectManagerHome()
+                    : const DeveloperHome(),
               ),
             );
           }

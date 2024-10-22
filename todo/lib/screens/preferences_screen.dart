@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
-import 'home_screen.dart';
+import 'developer_home.dart';
+import 'pm_home.dart';
 import '../services/firebase_service.dart';
 
 class PreferencesScreen extends StatefulWidget {
@@ -76,8 +77,13 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
       if (result['success']) {
         await _savePreferences();
         if (mounted) {
+          // Use the selected role directly since we just created the user with it
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(
+              builder: (context) => _selectedRole == 'project_manager'
+                  ? const ProjectManagerHome()
+                  : const DeveloperHome(),
+            ),
           );
         }
       } else {
@@ -204,8 +210,13 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                           } else {
                             await _savePreferences();
                             if (mounted) {
+                              // For non-new users, use current role from state
                               Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                                MaterialPageRoute(
+                                  builder: (context) => _selectedRole == 'project_manager'
+                                      ? const ProjectManagerHome()
+                                      : const DeveloperHome(),
+                                ),
                               );
                             }
                           }
