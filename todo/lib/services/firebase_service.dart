@@ -350,6 +350,78 @@ class FirebaseService {
         .snapshots();
   }
 
+  Future<String?> getUserDocumentId(String? email) async {
+    if (email == null) return null;
+
+    final usersQuery = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (usersQuery.docs.isNotEmpty) {
+      return usersQuery.docs.first.id;
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getUserDetailsByEmail(String? email) async {
+    if (email == null) return null;
+
+    final usersQuery = await _firestore
+        .collection('users')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+
+    if (usersQuery.docs.isNotEmpty) {
+      return {
+        'id': usersQuery.docs.first.id,
+        'data': usersQuery.docs.first.data(),
+      };
+    }
+    return null;
+  }
+
+  Future<int> getUserTaskCount(String userId) async {
+    final userTasksDoc = await _firestore
+        .collection('user_tasks')
+        .doc(userId)
+        .get();
+
+    if (userTasksDoc.exists) {
+      final tasks = userTasksDoc.data()?['tasks'] as List<dynamic>?;
+      return tasks?.length ?? 0;
+    }
+    return 0;
+  }
+
+  Future<Map<String, dynamic>?> getTaskDetails(String projectId, String taskId) async {
+    final taskDoc = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .doc(taskId)
+        .get();
+
+    if (taskDoc.exists) {
+      return taskDoc.data();
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getProjectDetails(String projectId) async {
+    final projectDoc = await _firestore
+        .collection('projects')
+        .doc(projectId)
+        .get();
+
+    if (projectDoc.exists) {
+      return projectDoc.data();
+    }
+    return null;
+  }
+
   Stream<QuerySnapshot> getProjectTasks(String projectId) {
     return _firestore
         .collection('projects')

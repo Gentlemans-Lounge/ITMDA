@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
+import '../widgets/shimmer_widgets.dart';
+import '../widgets/task_card.dart';
+import 'task_overview_screen.dart';
+import 'task_list_screen.dart';
 
 class DeveloperHome extends StatefulWidget {
   const DeveloperHome({super.key});
@@ -16,39 +20,39 @@ class _DeveloperHomeState extends State<DeveloperHome> {
   final FirebaseService _firebaseService = FirebaseService();
   String _displayName = '';
   int _taskCount = 0;
-  int _selectedIndex = 0;  // For bottom navigation
+  int _selectedIndex = 0;
+  String? _userId;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _calculateTaskCount();
+    _initializeUser();
   }
 
-  Future<void> _loadUserData() async {
+  Future<void> _initializeUser() async {
     final user = _firebaseService.getCurrentUser();
-    if (user != null) {
-      final userData = await _firebaseService.getUserData(user.uid);
-      if (userData.exists) {
+    if (user?.email != null) {
+      final userDetails =
+          await _firebaseService.getUserDetailsByEmail(user!.email);
+
+      if (userDetails != null && mounted) {
         setState(() {
-          _displayName = userData.get('displayName') ?? '';
+          _userId = userDetails['id'];
+          _displayName = userDetails['data']['displayName'] ?? '';
+          _isLoading = false;
         });
+        await _calculateTaskCount();
       }
     }
   }
 
   Future<void> _calculateTaskCount() async {
-    final user = _firebaseService.getCurrentUser();
-    if (user != null) {
-      final userTasksSnapshot = await FirebaseFirestore.instance
-          .collection('user_tasks')
-          .doc(user.uid)
-          .get();
-
-      if (userTasksSnapshot.exists) {
-        final tasks = userTasksSnapshot.data()?['tasks'] as List<dynamic>?;
+    if (_userId != null) {
+      final count = await _firebaseService.getUserTaskCount(_userId!);
+      if (mounted) {
         setState(() {
-          _taskCount = tasks?.length ?? 0;
+          _taskCount = count;
         });
       }
     }
@@ -82,6 +86,94 @@ class _DeveloperHomeState extends State<DeveloperHome> {
     );
   }
 
+  Widget _buildTaskCard({
+    required ThemeData theme,
+    required Map<String, dynamic> taskData,
+    Map<String, dynamic>? projectData,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  taskData['title'] ?? 'Untitled Task',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  taskData['status']?.toUpperCase() ?? 'TODO',
+                  style: TextStyle(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            taskData['description'] ?? 'No description available',
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withOpacity(0.8),
+              fontSize: 14,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 12),
+          if (projectData != null)
+            Row(
+              children: [
+                Icon(
+                  Icons.folder_outlined,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  projectData['name'] ?? 'Unknown Project',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -107,22 +199,27 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               ),
             ),
             ListTile(
-              leading: Icon(Icons.dashboard, color: theme.colorScheme.onSurface),
-              title: Text('Dashboard', style: TextStyle(color: theme.colorScheme.onSurface)),
+              leading:
+                  Icon(Icons.dashboard, color: theme.colorScheme.onSurface),
+              title: Text('Dashboard',
+                  style: TextStyle(color: theme.colorScheme.onSurface)),
               onTap: () {
                 Navigator.pop(context);
               },
             ),
             ListTile(
-              leading: Icon(Icons.analytics, color: theme.colorScheme.onSurface),
-              title: Text('Analytics', style: TextStyle(color: theme.colorScheme.onSurface)),
+              leading:
+                  Icon(Icons.analytics, color: theme.colorScheme.onSurface),
+              title: Text('Analytics',
+                  style: TextStyle(color: theme.colorScheme.onSurface)),
               onTap: () {
                 Navigator.pop(context);
               },
             ),
             ListTile(
               leading: Icon(Icons.settings, color: theme.colorScheme.onSurface),
-              title: Text('Settings', style: TextStyle(color: theme.colorScheme.onSurface)),
+              title: Text('Settings',
+                  style: TextStyle(color: theme.colorScheme.onSurface)),
               onTap: () {
                 Navigator.pop(context);
               },
@@ -156,7 +253,8 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                         ],
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.menu, color: theme.colorScheme.primary),
+                        icon:
+                            Icon(Icons.menu, color: theme.colorScheme.primary),
                         onPressed: () {
                           _scaffoldKey.currentState?.openDrawer();
                         },
@@ -176,7 +274,8 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                         ],
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.person, color: theme.colorScheme.primary),
+                        icon: Icon(Icons.person,
+                            color: theme.colorScheme.primary),
                         onPressed: _showProfilePopup,
                       ),
                     ),
@@ -202,7 +301,8 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               // Task Count Pill
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(50),
@@ -217,7 +317,8 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.message, color: theme.colorScheme.onSurface, size: 20),
+                      Icon(Icons.message,
+                          color: theme.colorScheme.onSurface, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'You have $_taskCount tasks today',
@@ -233,7 +334,6 @@ class _DeveloperHomeState extends State<DeveloperHome> {
 
               const SizedBox(height: 100),
 
-              // Today's Tasks Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -247,7 +347,15 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                   ),
                   TextButton(
                     onPressed: () {
-                      // TODO: Implement see all functionality
+                      if (_userId != null) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                TaskListScreen(userId: _userId!),
+                          ),
+                        );
+                      }
                     },
                     child: Row(
                       children: [
@@ -258,63 +366,82 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                             fontSize: 14,
                           ),
                         ),
-                        Icon(Icons.chevron_right, color: theme.colorScheme.primary),
+                        Icon(Icons.chevron_right,
+                            color: theme.colorScheme.primary),
                       ],
                     ),
                   ),
                 ],
               ),
-
               const SizedBox(height: 16),
+              if (_userId == null)
+                ShimmerWidgets.loadingTask(theme)
+              else
+                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _firebaseService.getUserTasks(_userId!),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return ShimmerWidgets.loadingTask(theme);
+                    }
 
-              // Task Card
-              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: _firebaseService.getUserTasks(_firebaseService.getCurrentUser()!.uid),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data == null) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+                    final tasks =
+                        (snapshot.data!.data()?['tasks'] as List<dynamic>?) ??
+                            [];
+                    if (tasks.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No tasks for today',
+                          style: TextStyle(color: theme.colorScheme.onSurface),
+                        ),
+                      );
+                    }
 
-                  final tasks = (snapshot.data!.data()?['tasks'] as List<dynamic>?) ?? [];
-                  if (tasks.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'No tasks for today',
-                        style: TextStyle(color: theme.colorScheme.onSurface),
-                      ),
+                    final firstTask = tasks[0];
+                    return FutureBuilder<Map<String, dynamic>?>(
+                      future: _firebaseService.getTaskDetails(
+                          firstTask['projectId'], firstTask['taskId']),
+                      builder: (context, taskSnapshot) {
+                        if (!taskSnapshot.hasData) {
+                          return ShimmerWidgets.loadingTask(theme);
+                        }
+
+                        final taskData = taskSnapshot.data;
+                        if (taskData == null) {
+                          return Center(
+                            child: Text(
+                              'Task data not available',
+                              style:
+                                  TextStyle(color: theme.colorScheme.onSurface),
+                            ),
+                          );
+                        }
+
+                        return FutureBuilder<Map<String, dynamic>?>(
+                          future: _firebaseService
+                              .getProjectDetails(firstTask['projectId']),
+                          builder: (context, projectSnapshot) {
+                            return TaskCard(
+                              theme: theme,
+                              taskData: taskData,
+                              projectData: projectSnapshot.data,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => TaskOverviewScreen(
+                                      taskData: taskData,
+                                      projectData: projectSnapshot.data,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
                     );
-                  }
-
-                  // Show first task
-                  final firstTask = tasks[0];
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Task details coming soon...',
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                  },
+                ),
             ],
           ),
         ),
