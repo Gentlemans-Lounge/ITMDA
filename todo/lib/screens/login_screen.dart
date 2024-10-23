@@ -55,24 +55,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
         _showSnackBar('Login successful!', false);
         if (mounted) {
-          if (role == 'project_manager') {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const ProjectManagerHome(),
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => PreferencesScreen(
+                onThemeChanged: (bool isDarkMode) {
+                  MyAppState? myAppState = context.findAncestorStateOfType<MyAppState>();
+                  myAppState?.toggleTheme(isDarkMode);
+                },
+                isNewUser: false,  // This is correct as they're an existing user
+                userData: userData,  // Pass the user data for role-based navigation
               ),
-            );
-          } else {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => const DeveloperHome(),
-              ),
-            );
-          }
+            ),
+          );
         }
       } else {
         if (result['needsRegistration'] == true) {
-          _showSnackBar(
-              'No account found with this email. Please register first.', true);
+          _showSnackBar('No account found with this email. Please register first.', true);
         } else {
           _showSnackBar(result['message'] ?? 'Login failed', true);
         }
@@ -101,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     MyAppState? myAppState = context.findAncestorStateOfType<MyAppState>();
                     myAppState?.toggleTheme(isDarkMode);
                   },
-                  isNewUser: true,
+                  isNewUser: true,  // This is correct as they need to set role/name
                   userData: result,
                 ),
               ),

@@ -68,19 +68,21 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
         return;
       }
 
+      // If we have userData from registration, use that role, otherwise use selected role
+      final roleToUse = widget.userData?['role'] ?? _selectedRole;
+
       final result = await _firebaseService.completeGoogleSignUp(
         user,
         _displayName,
-        _selectedRole,
+        roleToUse,
       );
 
       if (result['success']) {
         await _savePreferences();
         if (mounted) {
-          // Use the selected role directly since we just created the user with it
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
-              builder: (context) => _selectedRole == 'project_manager'
+              builder: (context) => roleToUse == 'project_manager'
                   ? const ProjectManagerHome()
                   : const DeveloperHome(),
             ),
@@ -210,10 +212,12 @@ class _PreferencesScreenState extends State<PreferencesScreen> {
                           } else {
                             await _savePreferences();
                             if (mounted) {
-                              // For non-new users, use current role from state
+                              // Get the role from userData if it exists (from email registration)
+                              final role = widget.userData?['role'] as String?;
+
                               Navigator.of(context).pushReplacement(
                                 MaterialPageRoute(
-                                  builder: (context) => _selectedRole == 'project_manager'
+                                  builder: (context) => role == 'project_manager'
                                       ? const ProjectManagerHome()
                                       : const DeveloperHome(),
                                 ),

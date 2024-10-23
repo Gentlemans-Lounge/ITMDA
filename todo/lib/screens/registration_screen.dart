@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:todo/screens/pm_home.dart';
 import '../main.dart';
 import '../services/firebase_service.dart';
+import 'developer_home.dart';
 import 'login_screen.dart';
 import 'preferences_screen.dart';
 
@@ -62,9 +64,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               builder: (context) => PreferencesScreen(
                 onThemeChanged: (bool isDarkMode) {
                   MyAppState? myAppState =
-                      context.findAncestorStateOfType<MyAppState>();
+                  context.findAncestorStateOfType<MyAppState>();
                   myAppState?.toggleTheme(isDarkMode);
                 },
+                // Do not set isNewUser to true since we already have their details
+                isNewUser: false,
+                // Pass the user data
+                userData: result['userData'] as Map<String, dynamic>,
               ),
             ),
           );
@@ -87,34 +93,34 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       if (result['success']) {
         if (result['needsRegistration'] == true) {
+          // New Google user needs to complete registration
           if (mounted) {
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => PreferencesScreen(
                   onThemeChanged: (bool isDarkMode) {
                     MyAppState? myAppState =
-                        context.findAncestorStateOfType<MyAppState>();
+                    context.findAncestorStateOfType<MyAppState>();
                     myAppState?.toggleTheme(isDarkMode);
                   },
-                  isNewUser: true,
+                  isNewUser: true,  // This is correct as they need to set role/name
                   userData: result,
                 ),
               ),
             );
           }
         } else {
-          _showSnackBar(
-              'Account already exists. Redirecting to home...', false);
+          _showSnackBar('Account already exists. Redirecting to home...', false);
           if (mounted) {
+            // Get the role from the existing user data
+            final userData = result['userData'] as Map<String, dynamic>;
+            final role = userData['role'] as String;
+
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (context) => PreferencesScreen(
-                  onThemeChanged: (bool isDarkMode) {
-                    MyAppState? myAppState =
-                        context.findAncestorStateOfType<MyAppState>();
-                    myAppState?.toggleTheme(isDarkMode);
-                  },
-                ),
+                builder: (context) => role == 'project_manager'
+                    ? const ProjectManagerHome()
+                    : const DeveloperHome(),
               ),
             );
           }
