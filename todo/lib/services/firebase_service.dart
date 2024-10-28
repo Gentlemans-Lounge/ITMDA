@@ -331,6 +331,7 @@ class FirebaseService {
   }
 
   Future<void> updateTaskStatus(String projectId, String taskId, String status) async {
+
     await _firestore
         .collection('projects')
         .doc(projectId)
@@ -340,6 +341,7 @@ class FirebaseService {
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
   }
 
   // Fetching data
@@ -420,6 +422,18 @@ class FirebaseService {
       return projectDoc.data();
     }
     return null;
+  }
+
+  Stream<DocumentSnapshot> streamTaskDetails(String projectId, String taskId) {
+    return _firestore
+        .collection('projects')
+        .doc(projectId)
+        .collection('tasks')
+        .doc(taskId)
+        .snapshots()
+        .map((doc) {
+      return doc;
+    });
   }
 
   Stream<QuerySnapshot> getProjectTasks(String projectId) {

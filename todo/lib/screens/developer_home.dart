@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
 import '../widgets/shimmer_widgets.dart';
 import '../widgets/task_card.dart';
+import 'colleagues_screen.dart';
+import 'messages_screen.dart';
 import 'task_overview_screen.dart';
 import 'task_list_screen.dart';
 
@@ -15,32 +17,47 @@ class DeveloperHome extends StatefulWidget {
 
 final List<String> _emojis = ['✌️', '🚀', '💪', '🌟', '🎯', '💫', '⭐️', '🔥'];
 
-class _DeveloperHomeState extends State<DeveloperHome> {
+class _DeveloperHomeState extends State<DeveloperHome> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final FirebaseService _firebaseService = FirebaseService();
+  final GlobalKey<State> _taskKey = GlobalKey<State>();
   String _displayName = '';
   int _taskCount = 0;
   int _selectedIndex = 0;
   String? _userId;
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeUser();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      setState(() {
+        _taskKey.currentState?.setState(() {});
+      });
+    }
   }
 
   Future<void> _initializeUser() async {
     final user = _firebaseService.getCurrentUser();
     if (user?.email != null) {
       final userDetails =
-          await _firebaseService.getUserDetailsByEmail(user!.email);
+      await _firebaseService.getUserDetailsByEmail(user!.email);
 
       if (userDetails != null && mounted) {
         setState(() {
           _userId = userDetails['id'];
           _displayName = userDetails['data']['displayName'] ?? '';
-          _isLoading = false;
         });
         await _calculateTaskCount();
       }
@@ -86,90 +103,124 @@ class _DeveloperHomeState extends State<DeveloperHome> {
     );
   }
 
-  Widget _buildTaskCard({
-    required ThemeData theme,
-    required Map<String, dynamic> taskData,
-    Map<String, dynamic>? projectData,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  taskData['title'] ?? 'Untitled Task',
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+  Widget _buildTaskSection(ThemeData theme) {
+    return WillPopScope(
+      onWillPop: () async {
+        if (mounted) {
+          setState(() {
+          });
+        }
+        return true;
+      },
+      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        key: _taskKey,
+        stream: _firebaseService.getUserTasks(_userId!),
+        builder: (context, snapshot) {
+
+          if (!snapshot.hasData) {
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              itemCount: 3,
+              itemBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: ShimmerWidgets.loadingTask(theme),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  taskData['status']?.toUpperCase() ?? 'TODO',
-                  style: TextStyle(
-                    color: theme.colorScheme.onPrimaryContainer,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+            );
+          }
+
+          final tasks = (snapshot.data!.data()?['tasks'] as List<dynamic>?) ?? [];
+
+          if (tasks.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.task_outlined,
+                    size: 64,
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No tasks available',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'You don\'t have any tasks assigned',
+                    style: TextStyle(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            taskData['description'] ?? 'No description available',
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.8),
-              fontSize: 14,
+            );
+          }
+
+          final firstTask = tasks[0];
+
+          return StreamBuilder<DocumentSnapshot>(
+            stream: _firebaseService.streamTaskDetails(
+              firstTask['projectId'],
+              firstTask['taskId'],
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 12),
-          if (projectData != null)
-            Row(
-              children: [
-                Icon(
-                  Icons.folder_outlined,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  projectData['name'] ?? 'Unknown Project',
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-        ],
+            builder: (context, taskSnapshot) {
+
+              if (!taskSnapshot.hasData) {
+                return ShimmerWidgets.loadingTask(theme);
+              }
+
+              final taskData = taskSnapshot.data?.data() as Map<String, dynamic>?;
+              if (taskData == null) {
+                return const SizedBox.shrink();
+              }
+
+              // Add the IDs to the task data
+              taskData['projectId'] = firstTask['projectId'];
+              taskData['taskId'] = firstTask['taskId'];
+
+
+              return FutureBuilder<Map<String, dynamic>?>(
+                future: _firebaseService.getProjectDetails(firstTask['projectId']),
+                builder: (context, projectSnapshot) {
+
+                  if (projectSnapshot.data != null) {
+                    projectSnapshot.data!['id'] = firstTask['projectId'];
+                  }
+
+                  return TaskCard(
+                    // Add a key based on the status to force rebuild
+                    key: ValueKey('task_${taskData['status']}_${taskData['taskId']}'),
+                    theme: theme,
+                    taskData: taskData,
+                    projectData: projectSnapshot.data,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TaskOverviewScreen(
+                            taskData: taskData,
+                            projectData: projectSnapshot.data,
+                          ),
+                        ),
+                      ).then((_) {
+                        if (mounted) {
+                          setState(() {
+                          });
+                        }
+                      });
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -199,8 +250,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               ),
             ),
             ListTile(
-              leading:
-                  Icon(Icons.dashboard, color: theme.colorScheme.onSurface),
+              leading: Icon(Icons.dashboard, color: theme.colorScheme.onSurface),
               title: Text('Dashboard',
                   style: TextStyle(color: theme.colorScheme.onSurface)),
               onTap: () {
@@ -208,8 +258,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               },
             ),
             ListTile(
-              leading:
-                  Icon(Icons.analytics, color: theme.colorScheme.onSurface),
+              leading: Icon(Icons.analytics, color: theme.colorScheme.onSurface),
               title: Text('Analytics',
                   style: TextStyle(color: theme.colorScheme.onSurface)),
               onTap: () {
@@ -253,8 +302,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                         ],
                       ),
                       child: IconButton(
-                        icon:
-                            Icon(Icons.menu, color: theme.colorScheme.primary),
+                        icon: Icon(Icons.menu, color: theme.colorScheme.primary),
                         onPressed: () {
                           _scaffoldKey.currentState?.openDrawer();
                         },
@@ -274,8 +322,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                         ],
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.person,
-                            color: theme.colorScheme.primary),
+                        icon: Icon(Icons.person, color: theme.colorScheme.primary),
                         onPressed: _showProfilePopup,
                       ),
                     ),
@@ -301,8 +348,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               // Task Count Pill
               Center(
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(50),
@@ -351,10 +397,13 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                TaskListScreen(userId: _userId!),
+                            builder: (context) => TaskListScreen(userId: _userId!),
                           ),
-                        );
+                        ).then((_) {
+                          setState(() {
+                            _taskKey.currentState?.setState(() {});
+                          });
+                        });
                       }
                     },
                     child: Row(
@@ -366,8 +415,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
                             fontSize: 14,
                           ),
                         ),
-                        Icon(Icons.chevron_right,
-                            color: theme.colorScheme.primary),
+                        Icon(Icons.chevron_right, color: theme.colorScheme.primary),
                       ],
                     ),
                   ),
@@ -377,71 +425,7 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               if (_userId == null)
                 ShimmerWidgets.loadingTask(theme)
               else
-                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: _firebaseService.getUserTasks(_userId!),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return ShimmerWidgets.loadingTask(theme);
-                    }
-
-                    final tasks =
-                        (snapshot.data!.data()?['tasks'] as List<dynamic>?) ??
-                            [];
-                    if (tasks.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'No tasks for today',
-                          style: TextStyle(color: theme.colorScheme.onSurface),
-                        ),
-                      );
-                    }
-
-                    final firstTask = tasks[0];
-                    return FutureBuilder<Map<String, dynamic>?>(
-                      future: _firebaseService.getTaskDetails(
-                          firstTask['projectId'], firstTask['taskId']),
-                      builder: (context, taskSnapshot) {
-                        if (!taskSnapshot.hasData) {
-                          return ShimmerWidgets.loadingTask(theme);
-                        }
-
-                        final taskData = taskSnapshot.data;
-                        if (taskData == null) {
-                          return Center(
-                            child: Text(
-                              'Task data not available',
-                              style:
-                                  TextStyle(color: theme.colorScheme.onSurface),
-                            ),
-                          );
-                        }
-
-                        return FutureBuilder<Map<String, dynamic>?>(
-                          future: _firebaseService
-                              .getProjectDetails(firstTask['projectId']),
-                          builder: (context, projectSnapshot) {
-                            return TaskCard(
-                              theme: theme,
-                              taskData: taskData,
-                              projectData: projectSnapshot.data,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TaskOverviewScreen(
-                                      taskData: taskData,
-                                      projectData: projectSnapshot.data,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
+                _buildTaskSection(theme),
             ],
           ),
         ),
@@ -492,7 +476,20 @@ class _DeveloperHomeState extends State<DeveloperHome> {
               setState(() {
                 _selectedIndex = index;
               });
-              // TODO: Add navigation logic for each tab
+              switch (index) {
+                case 1: // Messages
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const MessageScreen()),
+                  );
+                  break;
+                case 3: // Colleagues
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ColleaguesScreen()),
+                  );
+                  break;
+              }
             },
           ),
         ),
